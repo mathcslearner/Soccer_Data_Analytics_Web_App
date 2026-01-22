@@ -26,7 +26,7 @@ df = load_data()
 # --------------------
 st.title("European Top 5 Leagues - Team Performance Analytics")
 st.markdown(
-    "Interactive analysis of **attacking**, **defensive**, and **possession** metrics "
+    "Interactive analysis of **attacking**, **defensive**, **possession** and other advanced metrics "
     "across Europe's top five leagues."
 )
 
@@ -60,7 +60,7 @@ filtered_df = df[
 col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
-    st.metric("Avg Goals / Match", round(filtered_df["Goals"].mean(), 2))
+    st.metric("Avg Goals", round(filtered_df["Goals"].mean(), 2))
 
 with col2:
     st.metric("Avg xG", round(filtered_df["xG"].mean(), 2))
@@ -72,7 +72,7 @@ with col4:
     st.metric("Avg Goal Difference", round(filtered_df["Goal Difference"].mean(), 2))
 
 with col5:
-    st.metric("Clean Sheet %", round(filtered_df["Clean Sheet%"].mean(), 1))
+    st.metric("Avg Clean Sheet %", round(filtered_df["Clean Sheet%"].mean(), 1))
 
 st.divider()
 
@@ -103,6 +103,7 @@ with col1:
         labels={"Goals": "Goals"}
     )
     st.plotly_chart(fig_goals, use_container_width=True)
+    st.caption("Insight: The EPL is a more attacking-minded league, while Serie A is a more defensive-minded league")
 
 with col2:
     fig_xg = px.bar(
@@ -113,6 +114,7 @@ with col2:
         labels={"xG": "xG"}
     )
     st.plotly_chart(fig_xg, use_container_width=True)
+    st.caption("Insight: In all league except Ligue 1, teams overperform their xG on average! The league where teams overperform the most is La Liga.")
 
 st.divider()
 
@@ -131,14 +133,100 @@ fig_scatter = px.scatter(
     labels={"xG": "Expected Goals", "Goals": "Goals Scored"}
 )
 
+# Get axis range
+max_val = max(filtered_df["xG"].max(), filtered_df["Goals"].max())
+
+# Add y = x line
+fig_scatter.add_shape(
+    type="line",
+    x0=0, y0=0,
+    x1=max_val, y1=max_val,
+    line=dict(dash="dash", color = "rgba(220, 220, 220, 0.9)")
+)
+
+fig_scatter.add_annotation(
+    x=max_val * 0.95,
+    y=max_val * 0.95,
+    text="Goals = xG",
+    showarrow=False,
+    font=dict(size=12)
+)
+
 st.plotly_chart(fig_scatter, use_container_width=True)
+st.caption("Insight: As noted above, teams tend to overperform more than underperform on their xG")
 
 st.divider()
+
+# --------------------
+# Top 5 teams by category
+# ---------------------
+
+st.subheader("Top 5 Teams by Key Metrics")
+
+def top5_table(df, metric, ascending=False, decimals=2):
+    top5 = (
+        df.sort_values(metric, ascending=ascending)
+        .loc[:, ["team", "league", metric]]
+        .head(5)
+        .reset_index(drop=True)
+    )
+    top5.index += 1
+    top5[metric] = top5[metric].round(decimals)
+    return top5
+
+# -------- Row 1 (3 columns) --------
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown("### Pts / Match")
+    st.dataframe(
+        top5_table(filtered_df, "Pts pMatch"),
+        use_container_width=True,
+        hide_index=False
+    )
+
+with col2:
+    st.markdown("### Goals Scored")
+    st.dataframe(
+        top5_table(filtered_df, "Goals", decimals=0),
+        use_container_width=True,
+        hide_index=False
+    )
+
+with col3:
+    st.markdown("### Expected Goals (xG)")
+    st.dataframe(
+        top5_table(filtered_df, "xG"),
+        use_container_width=True,
+        hide_index=False
+    )
+
+# -------- Row 2 (2 columns, centered) --------
+spacer, col4, col5, spacer2 = st.columns([0.5, 1.2, 1, 0.5])
+
+with col4:
+    st.markdown("### Goal Difference")
+    st.dataframe(
+        top5_table(filtered_df, "Goal Difference", decimals=0),
+        use_container_width=True,
+        hide_index=False
+    )
+
+with col5:
+    st.markdown("### Possession %")
+    st.dataframe(
+        top5_table(filtered_df, "Poss", decimals=1),
+        use_container_width=True,
+        hide_index=False
+    )
+
 
 # --------------------
 # Top teams table
 # --------------------
 st.subheader("Top Teams Snapshot")
+
+st.caption("Click on the column you want to sort by!")
 
 top_teams = (
     filtered_df
