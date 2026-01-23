@@ -27,7 +27,6 @@ def league_average(df, league, season, metric):
         (df["season"] == season)
     ][metric].mean()
 
-
 def league_rank(df, league, season, team, metric, ascending=False):
     league_df = (
         df[
@@ -55,6 +54,22 @@ def league_percentile(df, league, season, team, metric, ascending=False):
     percentile = 100 * (1 - (league_df.loc[league_df["team"] == team, "rank"].values[0] - 1) / (len(league_df) - 1))
     return percentile
 
+def league_mean_std(df, league, season, metric):
+    league_df = df[
+        (df["league"] == league) &
+        (df["season"] == season)
+    ][metric]
+
+    return league_df.mean(), league_df.std()
+
+def league_min_max(df, league, season, metric):
+    league_df = df[
+        (df["league"] == league) &
+        (df["season"] == season)
+    ][metric]
+
+    return league_df.min(), league_df.max()
+
 def metric_card(df, league, season, team, metric, label, asc=False, decimals=1):
     value = df[metric].values[0]
     avg = league_average(df_all, league, season, metric)
@@ -67,13 +82,59 @@ def metric_card(df, league, season, team, metric, label, asc=False, decimals=1):
     st.write(f"Avg: {avg:.{decimals}f} | Rank: {rank}")
 
 # Radar builder
-def build_radar(df, league, season, team, metrics, title):
+def get_radar_values(df, league, season, team, metrics, radar_mode):
+    values = []
+
+    team_row = df[
+        (df["league"] == league) &
+        (df["season"] == season) &
+        (df["team"] == team)
+    ].iloc[0]
+
+    for metric, _, ascending in metrics:
+
+        if radar_mode == "Percentiles":
+            val = league_percentile(
+                df, league, season, team, metric, ascending
+            )
+
+        elif radar_mode == "Min-max scaled":
+            min_val, max_val = league_min_max(df, league, season, metric)
+
+            if max_val == min_val:
+                val = 50
+            else:
+                if ascending:
+                    # lower is better (e.g. Goals Allowed)
+                    val = 100 * (max_val - team_row[metric]) / (max_val - min_val)
+                else:
+                    # higher is better
+                    val = 100 * (team_row[metric] - min_val) / (max_val - min_val)
+
+            # safety clamp
+            val = max(0, min(100, val))
+
+        else:  # Normalized (z-score)
+            mean, std = league_mean_std(df, league, season, metric)
+
+            if std == 0:
+                val = 0
+            else:
+                val = (team_row[metric] - mean) / std
+
+            if ascending:
+                val = -val
+
+        values.append(val)
+
+    return values
+
+def build_radar(df, league, season, team, metrics, title, radar_mode):
     categories = [label for _, label, _ in metrics]
 
-    values = [
-        league_percentile(df, league, season, team, metric, asc)
-        for metric, _, asc in metrics
-    ]
+    values = get_radar_values(
+        df, league, season, team, metrics, radar_mode
+    )
 
     fig = go.Figure()
 
@@ -84,17 +145,36 @@ def build_radar(df, league, season, team, metrics, title):
         name=team
     ))
 
-    fig.add_trace(go.Scatterpolar(
-        r=[50] * len(categories),
-        theta=categories,
-        fill="toself",
-        name="League Avg",
-        opacity=0.3
-    ))
+    # Reference line
+    if radar_mode in ["Percentiles", "Min-max scaled"]:
+        ref_values = [50] * len(categories)
+        radial_range = [0, 100]
+        ref_name = "League Avg"
+
+    elif radar_mode == "Normalized (z-score)":
+        ref_values = [0] * len(categories)
+        radial_range = [-3, 3]  # standard & interpretable
+        ref_name = "League Avg (0)"
+
+    else:
+        ref_values = None
+        radial_range = None
+
+    if ref_values:
+        fig.add_trace(go.Scatterpolar(
+            r=ref_values,
+            theta=categories,
+            fill="toself",
+            opacity=0.25,
+            name=ref_name
+        ))
 
     fig.update_layout(
         polar=dict(
-            radialaxis=dict(visible=True, range=[0, 100])
+            radialaxis=dict(
+                visible=True,
+                range=radial_range
+            )
         ),
         title=title,
         showlegend=True
@@ -212,6 +292,13 @@ for col, (metric, label, asc, dec) in zip(cols, def_metrics):
 # --------------
 # Radar Section
 # -------------
+        
+radar_mode = st.radio(
+    "Radar scale",
+    ["Percentiles", "Min-max scaled", "Normalized (z-score)"],
+    horizontal=True
+)
+
 
 overall_metrics = [
     ("Goals", "Goals", False),
@@ -247,7 +334,8 @@ st.subheader("Overall Team Profile (League Percentiles)")
 fig_overall = build_radar(
     df_all, league, season, team,
     overall_metrics,
-    f"{team} — Overall Profile"
+    f"{team} — Overall Profile",
+    radar_mode
 )
 
 st.plotly_chart(fig_overall, use_container_width=True)
@@ -260,7 +348,8 @@ with col1:
     fig_attack = build_radar(
         df_all, league, season, team,
         offensive_metrics,
-        f"{team} — Offensive Profile"
+        f"{team} — Offensive Profile",
+        radar_mode
     )
     st.plotly_chart(fig_attack, use_container_width=True)
 
@@ -268,7 +357,8 @@ with col2:
     fig_def = build_radar(
         df_all, league, season, team,
         defensive_metrics,
-        f"{team} — Defensive Profile"
+        f"{team} — Defensive Profile",
+        radar_mode
     )
     st.plotly_chart(fig_def, use_container_width=True)
 
