@@ -2,6 +2,7 @@
 
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 
 # --------------------------------------------------
 # Page config
@@ -40,6 +41,19 @@ def league_rank(df, league, season, team, metric, ascending=False):
     league_df["rank"] = league_df.index + 1
     return league_df.loc[league_df["team"] == team, "rank"].values[0]
 
+def league_percentile(df, league, season, team, metric, ascending=False):
+    league_df = df[
+        (df["league"] == league) &
+        (df["season"] == season)
+    ][["team", metric]]
+
+    league_df["rank"] = league_df[metric].rank(
+        ascending=ascending,
+        method="min"
+    )
+
+    percentile = 100 * (1 - (league_df.loc[league_df["team"] == team, "rank"].values[0] - 1) / (len(league_df) - 1))
+    return percentile
 
 def metric_card(df, league, season, team, metric, label, asc=False, decimals=1):
     value = df[metric].values[0]
@@ -52,6 +66,41 @@ def metric_card(df, league, season, team, metric, label, asc=False, decimals=1):
     )
     st.write(f"Avg: {avg:.{decimals}f} | Rank: {rank}")
 
+# Radar builder
+def build_radar(df, league, season, team, metrics, title):
+    categories = [label for _, label, _ in metrics]
+
+    values = [
+        league_percentile(df, league, season, team, metric, asc)
+        for metric, _, asc in metrics
+    ]
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatterpolar(
+        r=values,
+        theta=categories,
+        fill="toself",
+        name=team
+    ))
+
+    fig.add_trace(go.Scatterpolar(
+        r=[50] * len(categories),
+        theta=categories,
+        fill="toself",
+        name="League Avg",
+        opacity=0.3
+    ))
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100])
+        ),
+        title=title,
+        showlegend=True
+    )
+
+    return fig
 
 # --------------------------------------------------
 # Title
@@ -159,4 +208,67 @@ cols = st.columns(4)
 for col, (metric, label, asc, dec) in zip(cols, def_metrics):
     with col:
         metric_card(team_df, league, season, team, metric, label, asc, dec)
+
+# --------------
+# Radar Section
+# -------------
+
+overall_metrics = [
+    ("Goals", "Goals", False),
+    ("xG", "xG", False),
+    ("Poss", "Possession", False),
+    ("Prg Passes", "Prog Passes", False),
+    ("Goals Allowed", "Goals Allowed", True),
+    ("xG Allowed", "xG Allowed", True),
+]
+
+offensive_metrics = [
+    ("Goals", "Goals", False),
+    ("xG", "xG", False),
+    ("Shots", "Shots", False),
+    ("SoT%", "SoT %", False),
+    ("Goals per Shots", "Goals / Shot", False),
+    ("Pass Completion%", "Pass Comp %", False),
+    ("Prg Passes", "Prog Passes", False),
+    ("Prg Carries", "Prog Carries", False),
+]
+
+defensive_metrics = [
+    ("Goals Allowed", "Goals Allowed", True),
+    ("xG Allowed", "xG Allowed", True),
+    ("Shots on Target Allowed", "SoT Allowed", True),
+    ("Tackle+Interceptions", "Tackles + Int", False),
+    ("Blocks", "Blocks", False),
+    ("Clearances", "Clearances", False),
+]
+
+st.subheader("Overall Team Profile (League Percentiles)")
+
+fig_overall = build_radar(
+    df_all, league, season, team,
+    overall_metrics,
+    f"{team} — Overall Profile"
+)
+
+st.plotly_chart(fig_overall, use_container_width=True)
+
+st.subheader("Offensive vs Defensive Profiles")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    fig_attack = build_radar(
+        df_all, league, season, team,
+        offensive_metrics,
+        f"{team} — Offensive Profile"
+    )
+    st.plotly_chart(fig_attack, use_container_width=True)
+
+with col2:
+    fig_def = build_radar(
+        df_all, league, season, team,
+        defensive_metrics,
+        f"{team} — Defensive Profile"
+    )
+    st.plotly_chart(fig_def, use_container_width=True)
 
