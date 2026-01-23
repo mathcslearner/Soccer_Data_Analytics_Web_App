@@ -226,11 +226,38 @@ with col5:
 # --------------------
 st.subheader("Top Teams Snapshot")
 
-st.caption("Click on the column you want to sort by!")
+metric_options = {
+    "Points per Match": "Pts pMatch",
+    "Goals Scored": "Goals",
+    "Expected Goals (xG)": "xG",
+    "Goal Difference": "Goal Difference",
+    "Possession %": "Poss"
+}
 
-top_teams = (
+selected_metric_label = st.selectbox(
+    "Rank teams by",
+    options=list(metric_options.keys()),
+    index=0
+)
+
+st.markdown(f"**Top 10 teams by {selected_metric_label}**")
+
+selected_metric = metric_options[selected_metric_label]
+
+snapshot_leagues = st.multiselect(
+    "Limit snapshot to league(s)",
+    options=filtered_df["league"].unique(),
+    default=filtered_df["league"].unique()
+)
+
+snapshot_df = filtered_df[
+    filtered_df["league"].isin(snapshot_leagues)
+]
+
+# Sort direction (possession & goals are higher-is-better)
+top10 = (
     filtered_df
-    .sort_values("Pts pMatch", ascending=False)
+    .sort_values(selected_metric, ascending=False)
     .loc[:, [
         "team",
         "league",
@@ -241,13 +268,19 @@ top_teams = (
         "Poss"
     ]]
     .head(10)
+    .reset_index(drop=True)
 )
 
+top10.index += 1
+
 st.dataframe(
-    top_teams,
-    use_container_width=True,
-    hide_index=True
+    top10.style.background_gradient(
+        subset=[selected_metric],
+        cmap="viridis"
+    ),
+    use_container_width=True
 )
+
 
 # --------------------
 # Footer hint
