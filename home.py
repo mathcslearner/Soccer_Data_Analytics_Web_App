@@ -157,6 +157,93 @@ st.caption("Insight: As noted above, teams tend to overperform more than underpe
 
 st.divider()
 
+# ----------------
+# Top xG overperformers and underperformers
+# ----------------
+
+xg_df = filtered_df.copy()
+
+# Avoid division by zero
+xg_df = xg_df[xg_df["xG"] > 0]
+
+xg_df["xG Overperformance %"] = (
+    (xg_df["Goals"] - xg_df["xG"]) / xg_df["xG"]
+) * 100
+
+st.subheader("xG Over / Underperformance (%)")
+
+col1, col2 = st.columns(2)
+
+# -------- Top 5 Overperformers --------
+with col1:
+    st.markdown("### Top 5 xG Overperformers")
+
+    top_over = (
+        xg_df
+        .sort_values("xG Overperformance %", ascending=False)
+        .loc[:, ["team", "league", "Goals", "xG", "xG Overperformance %"]]
+        .head(5)
+        .reset_index(drop=True)
+    )
+
+    top_over.index += 1
+    top_over["xG Overperformance %"] = top_over["xG Overperformance %"].round(1)
+
+    styled_top_over = (
+    top_over
+    .style
+    .background_gradient(
+        subset=["xG Overperformance %"],
+        cmap="RdYlGn"
+    )
+    .format({
+        "xG": "{:.1f}",
+        "xG Overperformance %": "{:.1f}"
+    })
+)
+
+    st.dataframe(
+        styled_top_over,
+        use_container_width=True
+    )
+
+st.caption("Insight: xG overperformance and underperformance tend to regress to the mean over time, so this metric identifies teams whose performance might be unsustainable")
+
+# -------- Top 5 Underperformers --------
+with col2:
+    st.markdown("### Top 5 xG Underperformers")
+
+    top_under = (
+        xg_df
+        .sort_values("xG Overperformance %", ascending=True)
+        .loc[:, ["team", "league", "Goals", "xG", "xG Overperformance %"]]
+        .head(5)
+        .reset_index(drop=True)
+    )
+
+    top_under.index += 1
+    top_under["xG Overperformance %"] = top_under["xG Overperformance %"].round(1)
+
+    styled_top_under = (
+    top_under
+    .style
+    .background_gradient(
+        subset=["xG Overperformance %"],
+        cmap="RdYlGn"
+    )
+    .format({
+        "xG": "{:.1f}",
+        "xG Overperformance %": "{:.1f}"
+    })
+)
+
+    st.dataframe(
+        styled_top_under,
+        use_container_width=True
+    )
+
+
+
 # --------------------
 # Top 5 teams by category
 # ---------------------
