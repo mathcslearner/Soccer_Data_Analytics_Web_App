@@ -114,4 +114,34 @@ def league_comparison_page(df_all):
             with cols[j]:
                 st.plotly_chart(fig_box, use_container_width=True)
 
+    # ---- violin plots for distribution differences
+    st.subheader("Distribution Comparison (Violin Plots)")
+
+    violin_rows = 3  # how many charts per row
+    for i in range(0, len(major_stats), violin_rows):
+        cols = st.columns(violin_rows)
+        for j, stat in enumerate(major_stats[i:i + violin_rows]):
+            violin_df = season_df[["league", stat]].copy()
+            violin_df[stat] = violin_df[stat].round(1)
+
+            fig_violin = px.violin(
+                violin_df,
+                x="league",
+                y=stat,
+                title=stat,
+                box=True,           # show inner boxplot
+                points="outliers",  # match boxplot behavior
+                color="league",
+                color_discrete_map=league_color_map
+            )
+
+            fig_violin.update_layout(
+                showlegend=False,
+                height=300,
+                margin=dict(l=40, r=40, t=50, b=40)
+            )
+
+            with cols[j]:
+                st.plotly_chart(fig_violin, use_container_width=True)
+
 league_comparison_page(df)
