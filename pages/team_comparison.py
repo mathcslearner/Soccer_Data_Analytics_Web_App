@@ -1,8 +1,9 @@
-#Team Comparison page for the Streamlit Soccer Data Analytics App
+# Team Comparison page for the Streamlit Soccer Data Analytics App
 
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 
 # --------------------------------------------------
 # Page config
@@ -30,10 +31,6 @@ def league_percentile(df, league, season, team, metric, ascending=False):
 def league_mean_std(df, league, season, metric):
     league_df = df[(df["league"] == league) & (df["season"] == season)][metric]
     return league_df.mean(), league_df.std()
-
-def league_min_max(df, league, season, metric):
-    league_df = df[(df["league"] == league) & (df["season"] == season)][metric]
-    return league_df.min(), league_df.max()
 
 def league_distribution(df, league, season, metric):
     league_df = df[(df["league"] == league) & (df["season"] == season)][metric]
@@ -85,8 +82,16 @@ def build_radar(df, league, season, team, metrics, title, radar_mode, center_ref
     fig = go.Figure()
     fig.add_trace(go.Scatterpolar(r=values, theta=categories, fill="toself", name=team))
 
-    if radar_mode == "Percentiles" or radar_mode == "Min-Max scaled":
-        fig.add_trace(go.Scatterpolar(r=[50]*len(categories), theta=categories, fill="toself", opacity=0.25, name="League Avg"))
+    if radar_mode in ["Percentiles", "Min-Max scaled"]:
+        fig.add_trace(
+            go.Scatterpolar(
+                r=[50]*len(categories),
+                theta=categories,
+                fill="toself",
+                opacity=0.25,
+                name="League Avg"
+            )
+        )
 
     fig.update_layout(
         polar=dict(radialaxis=dict(visible=True, range=[0, 100] if radar_mode != "Z-score" else None)),
@@ -94,6 +99,52 @@ def build_radar(df, league, season, team, metrics, title, radar_mode, center_ref
         showlegend=True
     )
     return fig
+
+def highlight_better(row, team1, team2, lower_better_map):
+    styles = [""] * len(row)
+
+    v1 = row[team1]
+    v2 = row[team2]
+    lower_better = lower_better_map[row.name]
+
+    if pd.isna(v1) or pd.isna(v2) or v1 == v2:
+        return styles
+
+    # Determine winner
+    if lower_better:
+        winner = team1 if v1 < v2 else team2
+        diff = abs(v1 - v2)
+        denom = abs(min(v1, v2))
+    else:
+        winner = team1 if v1 > v2 else team2
+        diff = abs(v1 - v2)
+        denom = abs(max(v1, v2))
+
+    # Safe percentage difference
+    pct_diff = 0 if denom < 1e-6 else diff / denom
+
+    # Map % diff → opacity (subtle → strong)
+    intensity = min(0.85, 0.15 + pct_diff)
+
+    styles[row.index.get_loc(winner)] = (
+        f"background-color: rgba(30, 144, 255, {intensity})"
+    )
+
+    return styles
+
+def percent_diff(v1, v2, lower_better):
+    if pd.isna(v1) or pd.isna(v2) or v1 == v2:
+        return 0.0
+
+    if lower_better:
+        better = min(v1, v2)
+        worse = max(v1, v2)
+    else:
+        better = max(v1, v2)
+        worse = min(v1, v2)
+
+    denom = abs(better)
+    return 0.0 if denom < 1e-6 else 100 * abs(worse - better) / denom
 
 # ------------------------------------------------------------
 # Metric sets 
@@ -133,7 +184,6 @@ defensive_metrics = [
 def team_comparison_page(df_all):
     st.title("Team Comparison")
 
-    # ---- selectors
     league = st.selectbox("League", sorted(df_all["league"].unique()))
     season = st.selectbox("Season", sorted(df_all["season"].unique()))
 
@@ -155,38 +205,118 @@ def team_comparison_page(df_all):
             horizontal=True
         )
 
-    # ---- comparison tables
-    cols = st.columns(2)
-
-    for col, team in zip(cols, [team1, team2]):
-        with col:
-            st.subheader(team)
-            team_df = df_all[
-                (df_all["league"] == league) &
-                (df_all["season"] == season) &
-                (df_all["team"] == team)
-            ]
-
-            st.write(team_df[["Pts pMatch", "Goals", "xG", "Goal Difference", "Poss"]].T)
-
-    # ---- radar charts
+    # ---------------- Radar charts ----------------
     st.subheader("Radar Comparison")
 
     col1, col2 = st.columns(2)
-
     with col1:
         st.plotly_chart(
             build_radar(df_all, league, season, team1, overall_metrics, f"{team1} — Overall", radar_mode, center_reference),
             use_container_width=True
         )
-
     with col2:
         st.plotly_chart(
             build_radar(df_all, league, season, team2, overall_metrics, f"{team2} — Overall", radar_mode, center_reference),
             use_container_width=True
         )
 
+    # ---------------- Stat comparison table ----------------
+    comparison_metrics = [
+        ("Pts pMatch", False),
+        ("Goals", False),
+        ("xG", False),
+        ("Goal Difference", False),
+        ("Poss", False),
+        ("Shots", False),
+        ("SoT%", False),
+        ("Goals Allowed", True),
+        ("xG Allowed", True),
+    ]
+
+    st.subheader("Stat-by-Stat Comparison")
+
+    row1 = df_all[(df_all["league"] == league) & (df_all["season"] == season) & (df_all["team"] == team1)].iloc[0]
+    row2 = df_all[(df_all["league"] == league) & (df_all["season"] == season) & (df_all["team"] == team2)].iloc[0]
+
+    rows = []
+    for metric, lower_better in comparison_metrics:
+        v1 = row1[metric]
+        v2 = row2[metric]
+
+        rows.append({
+            "Metric": metric,
+            team1: v1,
+            team2: v2,
+            "% Diff": percent_diff(v1, v2, lower_better),
+            "lower_better": lower_better
+        })
+
+    comparison_df = pd.DataFrame(rows)
+
+    lower_better_map = comparison_df["lower_better"].to_dict()
+
+    styled_df = (
+        comparison_df
+        .drop(columns="lower_better")
+        .style
+        .apply(
+            lambda row: highlight_better(row, team1, team2, lower_better_map),
+            axis=1
+        )
+        .format({
+            team1: "{:.2f}",
+            team2: "{:.2f}",
+            "% Diff": "{:.1f}%"
+        })
+    )
+
+    st.dataframe(styled_df, use_container_width=True)
+
+    # ---------------- Side-by-side bar chart ----------------
+    st.subheader("Headline Stat Comparison")
+
+    bar_metrics = ["Goals", "xG", "Shots", "Poss", "Goal Difference"]
+
+    # First row: 3 charts
+    row1_cols = st.columns(3)
+    for i, metric in enumerate(bar_metrics[:3]):
+        bar_df = pd.DataFrame({
+            "Team": [team1, team2],
+            "Value": [row1[metric], row2[metric]]
+        })
+
+        fig_bar = px.bar(
+            bar_df,
+            x="Team",
+            y="Value",
+            title=metric,
+            text="Value"
+        )
+
+        with row1_cols[i]:
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+    # Second row: 2 charts
+    row2_cols = st.columns(2)
+    for i, metric in enumerate(bar_metrics[3:]):
+        bar_df = pd.DataFrame({
+            "Team": [team1, team2],
+            "Value": [row1[metric], row2[metric]]
+        })
+
+        fig_bar = px.bar(
+            bar_df,
+            x="Team",
+            y="Value",
+            title=metric,
+            text="Value"
+        )
+
+        with row2_cols[i]:
+            st.plotly_chart(fig_bar, use_container_width=True)
+
 # ------------------------------------------------------------
 # Run page
 # ------------------------------------------------------------
 team_comparison_page(df)
+
