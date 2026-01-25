@@ -96,11 +96,39 @@ df["Cluster"] = kmeans.fit_predict(df[["Attack_Index", "Defense_Index"]])
 
 # Define cluster playstyle explanations
 cluster_explanations = {
-    0: "High press + strong attack (aggressive, dominant)",
-    1: "Low block + efficient defense (compact, counter-based)",
-    2: "Strong attack + weak defense (high risk, transition-heavy)",
-    3: "Balanced / possession control (steady attack and defense)"
+    i: f"Cluster {i}: tactical identity (interpretation depends on data)"
+    for i in range(k)
 }
+
+# --------------------------------------------------
+# Shared map function (fixes labels + zoom everywhere)
+# --------------------------------------------------
+def create_map(x_col, y_col, title, x_label, y_label, axis_limit=3):
+    fig = px.scatter(
+        df,
+        x=x_col,
+        y=y_col,
+        hover_name="team",
+        text="team",
+        title=title,
+        labels={x_col: x_label, y_col: y_label},
+        color="Cluster"
+    )
+
+    fig.add_hline(y=0, line_width=2, line_color="white")
+    fig.add_vline(x=0, line_width=2, line_color="white")
+
+    fig.update_xaxes(range=[-axis_limit, axis_limit], fixedrange=True)
+    fig.update_yaxes(range=[-axis_limit, axis_limit], fixedrange=True)
+
+    fig.update_layout(
+        #yaxis=dict(scaleanchor="x", scaleratio=1),
+        height=650
+    )
+
+    fig.update_traces(textposition="top center", textfont_size=10)
+
+    return fig
 
 # --------------------------------------------------
 # New Tactical Map Metrics
@@ -216,25 +244,16 @@ with tab1:
     - **Bottom-left:** Weak attack & weak defense → Struggling teams
     """)
 
-    axis_limit = 4
-    fig = px.scatter(
-        df, x="Attack_Index", y="Defense_Index",
-        color="Cluster", hover_name="team",
-        title="Attack vs Defense (Tactical Map)"
+    st.plotly_chart(
+        create_map(
+            "Attack_Index",
+            "Defense_Index",
+            "Attack vs Defense (Tactical Map)",
+            "Attack (z-score)",
+            "Defense (z-score)"
+        ),
+        use_container_width=True
     )
-
-    fig.add_hline(y=0, line_width=2, line_color="white")
-    fig.add_vline(x=0, line_width=2, line_color="white")
-
-    fig.update_xaxes(range=[-axis_limit, axis_limit], fixedrange=True)
-    fig.update_yaxes(range=[-axis_limit, axis_limit], fixedrange=True)
-
-    fig.update_layout(
-        yaxis=dict(scaleanchor="x", scaleratio=1),
-        height=650
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
 
 # --------------------------------------------------
 # Tab 2: Build-up vs Attack
@@ -250,56 +269,22 @@ with tab2:
     - **Bottom-left:** Weak build-up + weak attack → Low possession & low threat teams
     """)
 
-    axis_limit2 = 4
-    fig2 = px.scatter(
-        df, x="Build_Index", y="Attack_Index",
-        color="Cluster", hover_name="team",
-        title="Build-up Style vs Attack"
+    st.plotly_chart(
+        create_map(
+            "Build_Index",
+            "Attack_Index",
+            "Build-up Style vs Attack",
+            "Build-up (z-score)",
+            "Attack (z-score)"
+        ),
+        use_container_width=True
     )
-
-    fig2.add_hline(y=0, line_width=2, line_color="white")
-    fig2.add_vline(x=0, line_width=2, line_color="white")
-
-    fig2.update_xaxes(range=[-axis_limit2, axis_limit2], fixedrange=True)
-    fig2.update_yaxes(range=[-axis_limit2, axis_limit2], fixedrange=True)
-
-    fig2.update_layout(
-        yaxis=dict(scaleanchor="x", scaleratio=1),
-        height=650
-    )
-
-    st.plotly_chart(fig2, use_container_width=True)
 
 # --------------------------------------------------
 # Tab 3: Tactical Maps
 # --------------------------------------------------
 with tab3:
     st.subheader("Tactical Maps")
-
-    def create_map(x_col, y_col, title, x_label, y_label):
-        axis_limit = 3.5
-
-        fig = px.scatter(
-            df,
-            x=x_col,
-            y=y_col,
-            hover_name="team",
-            title=title,
-            labels={x_col: x_label, y_col: y_label},
-            color="Cluster"
-        )
-
-        fig.add_hline(y=0, line_width=2, line_color="white")
-        fig.add_vline(x=0, line_width=2, line_color="white")
-
-        fig.update_xaxes(range=[-axis_limit, axis_limit], fixedrange=True)
-        fig.update_yaxes(range=[-axis_limit, axis_limit], fixedrange=True)
-
-        fig.update_layout(
-            yaxis=dict(scaleanchor="x", scaleratio=1),
-            height=650
-        )
-        return fig
 
     # Map 1: Final Third vs Box Entries
     st.markdown("### Final Third Activity vs Box Entries")
@@ -366,31 +351,6 @@ with tab3:
 # --------------------------------------------------
 with tab4:
     st.subheader("Tactical Maps 2 — Risk/Threat/Set Piece/Defense")
-
-    def create_map(x_col, y_col, title, x_label, y_label):
-        axis_limit = 3.5
-
-        fig = px.scatter(
-            df,
-            x=x_col,
-            y=y_col,
-            hover_name="team",
-            title=title,
-            labels={x_col: x_label, y_col: y_label},
-            color="Cluster"
-        )
-
-        fig.add_hline(y=0, line_width=2, line_color="white")
-        fig.add_vline(x=0, line_width=2, line_color="white")
-
-        fig.update_xaxes(range=[-axis_limit, axis_limit], fixedrange=True)
-        fig.update_yaxes(range=[-axis_limit, axis_limit], fixedrange=True)
-
-        fig.update_layout(
-            yaxis=dict(scaleanchor="x", scaleratio=1),
-            height=650
-        )
-        return fig
 
     # Map 1: Risk vs Reward
     st.markdown("### Risk vs Reward")
