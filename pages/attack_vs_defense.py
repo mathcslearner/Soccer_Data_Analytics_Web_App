@@ -12,7 +12,7 @@ from sklearn.cluster import KMeans
 # --------------------------------------------------
 st.set_page_config(page_title="Tactical Identity", layout="wide")
 
-st.title("⚔️ Tactical Identity Analysis")
+st.title("Tactical Identity Analysis")
 st.markdown(
     """
     Analyze team style through Attack vs Defense, Build-up vs Attack, cluster radar, and tactical maps.
@@ -161,12 +161,44 @@ df["HighPress_Index"] = df[press_high_features].mean(axis=1)
 df["Compact_Def_Index"] = df[compact_def_features].mean(axis=1)
 
 # --------------------------------------------------
+# NEW METRICS: 4 NEW MAPS
+# --------------------------------------------------
+# 1) Risk vs Reward
+risk_features = ["Errors", "Miscontrols", "Dispossessed"]
+reward_features = ["xG", "Shots", "Shots on Target"]
+
+df[risk_features] = scaler.fit_transform(df[risk_features])
+df[reward_features] = scaler.fit_transform(df[reward_features])
+
+df["Risk_Index"] = df[risk_features].mean(axis=1)
+df["Reward_Index"] = df[reward_features].mean(axis=1)
+
+# 2) Attacking Threat
+threat_features = ["Shots on Target", "npxG", "Avg Shot Dist"]
+df[threat_features] = scaler.fit_transform(df[threat_features])
+
+df["Threat_Index"] = df[threat_features].mean(axis=1)
+
+# 3) Set Piece Dependency
+setpiece_features = ["FK Goals", "Corner Goals", "PK Gls"]
+df[setpiece_features] = scaler.fit_transform(df[setpiece_features])
+
+df["SetPiece_Index"] = df[setpiece_features].mean(axis=1)
+
+# 4) Defensive Vulnerability
+vulnerability_features = ["Goals Allowed", "Shots on Target Allowed", "xG Allowed"]
+df[vulnerability_features] = scaler.fit_transform(df[vulnerability_features])
+
+df["Vulnerability_Index"] = df[vulnerability_features].mean(axis=1)
+
+# --------------------------------------------------
 # Tabs
 # --------------------------------------------------
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Attack vs Defense",
     "Build-up vs Attack",
     "Tactical Maps",
+    "Tactical Maps 2",
     "Cluster & Team Identity"
 ])
 
@@ -270,7 +302,7 @@ with tab3:
         return fig
 
     # Map 1: Final Third vs Box Entries
-    st.markdown("### 1️⃣ Final Third Activity vs Box Entries")
+    st.markdown("### Final Third Activity vs Box Entries")
     st.markdown("""
         **Quadrants:**
         - **Top-right:** High final third activity + high box entries → strong threat and penetration
@@ -290,7 +322,7 @@ with tab3:
     )
 
     # Map 2: Progressive vs Direct
-    st.markdown("### 2️⃣ Progressive vs Direct Play")
+    st.markdown("### Progressive vs Direct Play")
     st.markdown("""
         **Quadrants:**
         - **Top-right:** High progressive + high direct → elite attackers (both movement and directness)
@@ -310,7 +342,7 @@ with tab3:
     )
 
     # Map 3: High Press vs Compact Defense
-    st.markdown("### 3️⃣ High Press vs Compact Defense")
+    st.markdown("### High Press vs Compact Defense")
     st.markdown("""
         **Quadrants:**
         - **Top-right:** High press + strong compact defense → dominant, balanced teams
@@ -330,9 +362,120 @@ with tab3:
     )
 
 # --------------------------------------------------
-# Tab 4: Cluster radar + top teams + identity
+# Tab 4: Tactical Maps 2 (NEW)
 # --------------------------------------------------
 with tab4:
+    st.subheader("Tactical Maps 2 — Risk/Threat/Set Piece/Defense")
+
+    def create_map(x_col, y_col, title, x_label, y_label):
+        axis_limit = 3.5
+
+        fig = px.scatter(
+            df,
+            x=x_col,
+            y=y_col,
+            hover_name="team",
+            title=title,
+            labels={x_col: x_label, y_col: y_label},
+            color="Cluster"
+        )
+
+        fig.add_hline(y=0, line_width=2, line_color="white")
+        fig.add_vline(x=0, line_width=2, line_color="white")
+
+        fig.update_xaxes(range=[-axis_limit, axis_limit], fixedrange=True)
+        fig.update_yaxes(range=[-axis_limit, axis_limit], fixedrange=True)
+
+        fig.update_layout(
+            yaxis=dict(scaleanchor="x", scaleratio=1),
+            height=650
+        )
+        return fig
+
+    # Map 1: Risk vs Reward
+    st.markdown("### Risk vs Reward")
+    st.markdown("""
+        **Quadrants:**
+        - **Top-right:** High risk + high reward → aggressive teams with big swings
+        - **Top-left:** High risk + low reward → inefficient / chaotic teams
+        - **Bottom-right:** Low risk + high reward → efficient, clinical teams
+        - **Bottom-left:** Low risk + low reward → safe but weak teams
+    """)
+    st.plotly_chart(
+        create_map(
+            "Risk_Index",
+            "Reward_Index",
+            "Risk vs Reward",
+            "Risk (z-score)",
+            "Reward (z-score)"
+        ),
+        use_container_width=True
+    )
+
+    # Map 2: Attacking Threat
+    st.markdown("### Attacking Threat")
+    st.markdown("""
+        **Quadrants:**
+        - **Top-right:** High threat → many shots + high quality chances
+        - **Top-left:** High threat quality but low volume → efficient chance creators
+        - **Bottom-right:** High volume but low quality → lots of shots, low conversion
+        - **Bottom-left:** Low threat → weak attack
+    """)
+    st.plotly_chart(
+        create_map(
+            "Threat_Index",
+            "Attack_Index",
+            "Attacking Threat vs Attack Strength",
+            "Threat (z-score)",
+            "Attack Strength (z-score)"
+        ),
+        use_container_width=True
+    )
+
+    # Map 3: Set Piece Dependency
+    st.markdown("### Set Piece Dependency")
+    st.markdown("""
+        **Quadrants:**
+        - **Top-right:** High set-piece scoring + high overall attack → dominant set-piece teams
+        - **Top-left:** High set-piece scoring but weak attack → set-piece reliant
+        - **Bottom-right:** Low set-piece scoring but strong attack → open-play reliant
+        - **Bottom-left:** Low set-piece scoring + weak attack → weak overall teams
+    """)
+    st.plotly_chart(
+        create_map(
+            "SetPiece_Index",
+            "Attack_Index",
+            "Set Piece Dependency vs Attack Strength",
+            "Set Piece Dependency (z-score)",
+            "Attack Strength (z-score)"
+        ),
+        use_container_width=True
+    )
+
+    # Map 4: Defensive Vulnerability
+    st.markdown("### Defensive Vulnerability")
+    st.markdown("""
+        **Quadrants:**
+        - **Top-right:** High vulnerability + weak defense → very vulnerable teams
+        - **Top-left:** High vulnerability but strong attack → risk of conceding despite scoring
+        - **Bottom-right:** Low vulnerability but weak attack → solid but weak teams
+        - **Bottom-left:** Low vulnerability + strong attack → elite balanced teams
+    """)
+    st.plotly_chart(
+        create_map(
+            "Vulnerability_Index",
+            "Defense_Index",
+            "Defensive Vulnerability vs Defense Strength",
+            "Defensive Vulnerability (z-score)",
+            "Defense Strength (z-score)"
+        ),
+        use_container_width=True
+    )
+
+# --------------------------------------------------
+# Tab 5: Cluster radar + top teams + identity
+# --------------------------------------------------
+with tab5:
     st.subheader("Cluster Radar + Team Identity")
 
     # Cluster radar chart (normalized)
