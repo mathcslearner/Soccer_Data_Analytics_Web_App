@@ -15,7 +15,7 @@ st.set_page_config(page_title="Tactical Identity", layout="wide")
 st.title("⚔️ Tactical Identity Analysis")
 st.markdown(
     """
-    Analyze team style through Attack vs Defense, Build-up vs Attack, cluster radar, and team identity.
+    Analyze team style through Attack vs Defense, Build-up vs Attack, cluster radar, and tactical maps.
     """
 )
 
@@ -103,9 +103,72 @@ cluster_explanations = {
 }
 
 # --------------------------------------------------
+# New Tactical Map Metrics
+# --------------------------------------------------
+# 1) Final Third vs Box entries
+final3rd_features = [
+    "Final Third Pass",
+    "Carries into Final Third"
+]
+
+box_features = [
+    "Pass into Pen Area",
+    "Carries into Pen Area"
+]
+
+df[final3rd_features] = scaler.fit_transform(df[final3rd_features])
+df[box_features] = scaler.fit_transform(df[box_features])
+
+df["Final3rd_Index"] = df[final3rd_features].mean(axis=1)
+df["Box_Index"] = df[box_features].mean(axis=1)
+
+# 2) Progressive vs Direct
+prog_features = [
+    "Prg Carries",
+    "Prg Passes",
+    "Progressive Receives"
+]
+
+direct_features = [
+    "Crosses",
+    "Cross into Pen Area",
+    "Long Pass Att"
+]
+
+df[prog_features] = scaler.fit_transform(df[prog_features])
+df[direct_features] = scaler.fit_transform(df[direct_features])
+
+df["Progressive_Index"] = df[prog_features].mean(axis=1)
+df["Direct_Index"] = df[direct_features].mean(axis=1)
+
+# 3) Pressing vs Compactness
+press_high_features = [
+    "Tackles Att 3rd",
+    "Dribble Stops",
+    "Interceptions"
+]
+
+compact_def_features = [
+    "Tackles Def 3rd",
+    "Clearances",
+    "Recoveries"
+]
+
+df[press_high_features] = scaler.fit_transform(df[press_high_features])
+df[compact_def_features] = scaler.fit_transform(df[compact_def_features])
+
+df["HighPress_Index"] = df[press_high_features].mean(axis=1)
+df["Compact_Def_Index"] = df[compact_def_features].mean(axis=1)
+
+# --------------------------------------------------
 # Tabs
 # --------------------------------------------------
-tab1, tab2, tab3 = st.tabs(["Attack vs Defense", "Build-up vs Attack", "Cluster & Team Identity"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Attack vs Defense",
+    "Build-up vs Attack",
+    "Tactical Maps",
+    "Cluster & Team Identity"
+])
 
 # --------------------------------------------------
 # Tab 1: Attack vs Defense map
@@ -176,9 +239,100 @@ with tab2:
     st.plotly_chart(fig2, use_container_width=True)
 
 # --------------------------------------------------
-# Tab 3: Cluster radar + top teams + identity
+# Tab 3: Tactical Maps
 # --------------------------------------------------
 with tab3:
+    st.subheader("Tactical Maps")
+
+    def create_map(x_col, y_col, title, x_label, y_label):
+        axis_limit = 3.5
+
+        fig = px.scatter(
+            df,
+            x=x_col,
+            y=y_col,
+            hover_name="team",
+            title=title,
+            labels={x_col: x_label, y_col: y_label},
+            color="Cluster"
+        )
+
+        fig.add_hline(y=0, line_width=2, line_color="white")
+        fig.add_vline(x=0, line_width=2, line_color="white")
+
+        fig.update_xaxes(range=[-axis_limit, axis_limit], fixedrange=True)
+        fig.update_yaxes(range=[-axis_limit, axis_limit], fixedrange=True)
+
+        fig.update_layout(
+            yaxis=dict(scaleanchor="x", scaleratio=1),
+            height=650
+        )
+        return fig
+
+    # Map 1: Final Third vs Box Entries
+    st.markdown("### 1️⃣ Final Third Activity vs Box Entries")
+    st.markdown("""
+        **Quadrants:**
+        - **Top-right:** High final third activity + high box entries → strong threat and penetration
+        - **Top-left:** High final third activity but low box entries → possession-heavy but not penetrating
+        - **Bottom-right:** Low final third activity but high box entries → direct, quick attacks
+        - **Bottom-left:** Low both → low threat teams
+    """)
+    st.plotly_chart(
+        create_map(
+            "Final3rd_Index",
+            "Box_Index",
+            "Final Third Activity vs Box Entries",
+            "Final Third Activity (z-score)",
+            "Box Entries (z-score)"
+        ),
+        use_container_width=True
+    )
+
+    # Map 2: Progressive vs Direct
+    st.markdown("### 2️⃣ Progressive vs Direct Play")
+    st.markdown("""
+        **Quadrants:**
+        - **Top-right:** High progressive + high direct → elite attackers (both movement and directness)
+        - **Top-left:** High progressive but low direct → possession / build-up heavy teams
+        - **Bottom-right:** Low progressive but high direct → long ball / wing cross teams
+        - **Bottom-left:** Low both → weak transition and attack
+    """)
+    st.plotly_chart(
+        create_map(
+            "Progressive_Index",
+            "Direct_Index",
+            "Progressive vs Direct Play",
+            "Progressive Play (z-score)",
+            "Direct Play (z-score)"
+        ),
+        use_container_width=True
+    )
+
+    # Map 3: High Press vs Compact Defense
+    st.markdown("### 3️⃣ High Press vs Compact Defense")
+    st.markdown("""
+        **Quadrants:**
+        - **Top-right:** High press + strong compact defense → dominant, balanced teams
+        - **Top-left:** High press but weak compact defense → high risk, exposed teams
+        - **Bottom-right:** Low press but strong compact defense → low block / counter teams
+        - **Bottom-left:** Low press + weak defense → vulnerable teams
+    """)
+    st.plotly_chart(
+        create_map(
+            "HighPress_Index",
+            "Compact_Def_Index",
+            "High Press vs Compact Defense",
+            "High Press (z-score)",
+            "Compact Defense (z-score)"
+        ),
+        use_container_width=True
+    )
+
+# --------------------------------------------------
+# Tab 4: Cluster radar + top teams + identity
+# --------------------------------------------------
+with tab4:
     st.subheader("Cluster Radar + Team Identity")
 
     # Cluster radar chart (normalized)
