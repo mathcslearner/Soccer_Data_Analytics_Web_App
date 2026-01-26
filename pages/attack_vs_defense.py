@@ -122,7 +122,6 @@ def create_map(x_col, y_col, title, x_label, y_label, axis_limit=3):
     fig.update_yaxes(range=[-axis_limit, axis_limit], fixedrange=True)
 
     fig.update_layout(
-        #yaxis=dict(scaleanchor="x", scaleratio=1),
         height=650
     )
 
