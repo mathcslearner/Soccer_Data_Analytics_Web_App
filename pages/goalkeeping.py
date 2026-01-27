@@ -9,7 +9,7 @@ import plotly.express as px
 # --------------------------------------------------
 st.set_page_config(page_title="Goalkeeping & Defense", layout="wide")
 
-st.title("🧤 Goalkeeping & Defensive Analysis")
+st.title("Goalkeeping & Defensive Analysis")
 
 # --------------------------------------------------
 # Load data
@@ -38,7 +38,7 @@ season = st.sidebar.selectbox(
 filtered_df = df[
     (df["league"] == league) &
     (df["season"] == season)
-]
+].copy()
 
 # --------------------------------------------------
 # Derived metrics
@@ -54,7 +54,7 @@ filtered_df["Defensive Actions"] = (
 # --------------------------------------------------
 # Section 1 — League overview
 # --------------------------------------------------
-st.subheader("📊 League Overview")
+st.subheader("League Overview")
 
 col1, col2, col3 = st.columns(3)
 
@@ -76,7 +76,7 @@ col3.metric(
 # --------------------------------------------------
 # Section 2 — Shot-stopping (GK performance)
 # --------------------------------------------------
-st.subheader("🧤 Goalkeeper Shot-Stopping")
+st.subheader("Goalkeeper Shot-Stopping")
 
 fig_shotstop = px.scatter(
     filtered_df,
@@ -89,36 +89,68 @@ fig_shotstop = px.scatter(
     title="Goals Allowed vs xG Allowed",
     labels={
         "xG Allowed": "Expected Goals Against",
-        "Goals Allowed": "Goals Conceded"
+        "Goals Allowed": "Goals Conceded",
+        "GK Shot Stopping": "xG − Goals"
     }
 )
 
+# Clear y = x reference line
+x_min = filtered_df["xG Allowed"].min()
+x_max = filtered_df["xG Allowed"].max()
+
 fig_shotstop.add_shape(
     type="line",
-    x0=filtered_df["xG Allowed"].min(),
-    y0=filtered_df["xG Allowed"].min(),
-    x1=filtered_df["xG Allowed"].max(),
-    y1=filtered_df["xG Allowed"].max(),
-    line=dict(dash="dash")
+    x0=x_min,
+    y0=x_min,
+    x1=x_max,
+    y1=x_max,
+    line=dict(
+        color="rgba(200,200,200,0.9)",
+        width=3,
+        dash="dot"
+    )
+)
+
+fig_shotstop.add_annotation(
+    x=x_max,
+    y=x_max,
+    text="Expected = Conceded",
+    showarrow=False,
+    xanchor="right",
+    yanchor="bottom",
+    font=dict(size=12, color="lightgray")
 )
 
 st.plotly_chart(fig_shotstop, use_container_width=True)
 
 st.caption(
-    "Above the diagonal = conceding more than expected (poor shot-stopping). "
-    "Below = strong goalkeeping."
+    "Below the diagonal = better-than-expected shot-stopping. "
+    "Above = conceding more than expected."
 )
 
 # --------------------------------------------------
 # Section 3 — Save efficiency
 # --------------------------------------------------
-st.subheader("🧮 Save Efficiency")
+st.subheader("Save Efficiency")
 
 fig_save = px.bar(
     filtered_df.sort_values("Save%", ascending=False),
     x="team",
     y="Save%",
+    color="Save%",
+    color_continuous_scale="Viridis",
     title="Save Percentage by Team"
+)
+
+fig_save.update_layout(
+    coloraxis_showscale=True
+)
+
+fig_save.update_yaxes(
+    range=[
+        filtered_df["Save%"].min() - 5,
+        filtered_df["Save%"].max() + 5
+    ]
 )
 
 st.plotly_chart(fig_save, use_container_width=True)
@@ -126,7 +158,7 @@ st.plotly_chart(fig_save, use_container_width=True)
 # --------------------------------------------------
 # Section 4 — Defensive activity
 # --------------------------------------------------
-st.subheader("🧱 Defensive Activity")
+st.subheader("Defensive Activity")
 
 fig_defense = px.scatter(
     filtered_df,
@@ -138,7 +170,8 @@ fig_defense = px.scatter(
     title="Defensive Actions vs Goals Allowed",
     labels={
         "Defensive Actions": "Tackles + Interceptions",
-        "Goals Allowed": "Goals Conceded"
+        "Goals Allowed": "Goals Conceded",
+        "Blocks": "Blocks"
     }
 )
 
@@ -147,7 +180,7 @@ st.plotly_chart(fig_defense, use_container_width=True)
 # --------------------------------------------------
 # Section 5 — Errors & discipline
 # --------------------------------------------------
-st.subheader("⚠️ Errors & Discipline")
+st.subheader("Errors & Discipline")
 
 col1, col2, col3 = st.columns(3)
 
@@ -167,9 +200,9 @@ col3.metric(
 )
 
 # --------------------------------------------------
-# Section 6 — Team table
+# Section 6 — Defensive summary table
 # --------------------------------------------------
-st.subheader("📋 Defensive Summary Table")
+st.subheader("Defensive Summary Table")
 
 table_cols = [
     "team",
