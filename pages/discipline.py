@@ -74,7 +74,7 @@ df["Discipline_Index"] = (
 # --------------------------------------------------
 # League-level overview
 # --------------------------------------------------
-st.subheader("📊 Average Discipline Metrics by League")
+st.subheader("Average Discipline Metrics by League")
 
 metrics = {
     "Fouls per 90": "Fouls_p90",
@@ -114,7 +114,10 @@ for i, (label, metric) in enumerate(metrics.items()):
 # --------------------------------------------------
 # Aggression vs Discipline scatter
 # --------------------------------------------------
-st.subheader("⚖️ Aggression vs Control")
+st.subheader("Aggression vs Control")
+
+x_mean = df["Fouls_p90"].mean()
+y_mean = df["Yellow_p90"].mean()
 
 fig = px.scatter(
     df,
@@ -123,12 +126,63 @@ fig = px.scatter(
     size="Red_p90",
     color="league",
     hover_name="team",
-    title="Fouls vs Yellow Cards (Bubble = Red Cards)"
+    title="Aggression vs Control Map"
 )
-fig.add_hline(y=df["Yellow_p90"].mean(), line_dash="dash")
-fig.add_vline(x=df["Fouls_p90"].mean(), line_dash="dash")
 
+# Bold quadrant axes
+fig.add_vline(
+    x=x_mean,
+    line_width=2,
+    line_color="white",
+    line_dash="dash"
+)
+
+fig.add_hline(
+    y=y_mean,
+    line_width=2,
+    line_color="white",
+    line_dash="dash"
+)
+
+# Force vertical stretch
+y_span = df["Yellow_p90"].max() - df["Yellow_p90"].min()
+if y_span == 0:
+    y_span = y_mean * 0.5
+
+fig.update_yaxes(
+    autorange=False,
+    range=[y_mean - 0.8 * y_span, y_mean + 0.8 * y_span]
+)
+
+# Quadrant annotations
+fig.add_annotation(x=x_mean * 0.7, y=y_mean * 1.4,
+                   text="Passive but Reckless",
+                   showarrow=False)
+
+fig.add_annotation(x=x_mean * 1.3, y=y_mean * 1.4,
+                   text="Aggressive & Reckless",
+                   showarrow=False)
+
+fig.add_annotation(x=x_mean * 0.7, y=y_mean * 0.6,
+                   text="Passive & Controlled",
+                   showarrow=False)
+
+fig.add_annotation(x=x_mean * 1.3, y=y_mean * 0.6,
+                   text="Aggressive but Controlled",
+                   showarrow=False)
+
+fig.update_layout(height=800)
 st.plotly_chart(fig, use_container_width=True)
+
+st.caption(
+    """
+    **Quadrant interpretation**
+    - Aggressive & Controlled: press hard, foul often, but avoid cards
+    - Aggressive & Reckless: foul-heavy with frequent bookings
+    - Passive & Controlled: low defensive intensity, clean play
+    - Passive but Reckless: fewer fouls, but poor timing or positioning
+    """
+)
 
 # --------------------------------------------------
 # Most disciplined / least disciplined teams
