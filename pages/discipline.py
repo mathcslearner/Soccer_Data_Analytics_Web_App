@@ -74,27 +74,42 @@ df["Discipline_Index"] = (
 # --------------------------------------------------
 # League-level overview
 # --------------------------------------------------
-st.subheader("League Discipline Overview")
+st.subheader("📊 Average Discipline Metrics by League")
+
+metrics = {
+    "Fouls per 90": "Fouls_p90",
+    "Yellow Cards per 90": "Yellow_p90",
+    "Red Cards per 90": "Red_p90",
+    "Penalties Conceded per 90": "PensConceded_p90"
+}
 
 league_avg = (
-    df.groupby("league")[[
-        "Fouls_p90",
-        "Yellow_p90",
-        "Red_p90",
-        "PensConceded_p90"
-    ]]
+    df.groupby("league")[list(metrics.values())]
     .mean()
     .reset_index()
 )
 
-fig = px.bar(
-    league_avg,
-    x="league",
-    y=["Fouls_p90", "Yellow_p90", "Red_p90", "PensConceded_p90"],
-    barmode="group",
-    title="Average Discipline Metrics by League"
-)
-st.plotly_chart(fig, use_container_width=True)
+league_avg = league_avg.sort_values("Fouls_p90")
+
+cols = st.columns(2)
+
+for i, (label, metric) in enumerate(metrics.items()):
+    fig = px.bar(
+        league_avg,
+        x="league",
+        y=metric,
+        title=label
+    )
+
+    fig.update_traces(
+        texttemplate="%{y:.2f}",
+        textposition="outside"
+    )
+
+    y_max = league_avg[metric].max()
+    fig.update_yaxes(range=[0, y_max * 1.15])
+
+    cols[i % 2].plotly_chart(fig, use_container_width=True)
 
 # --------------------------------------------------
 # Aggression vs Discipline scatter
