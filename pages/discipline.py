@@ -225,7 +225,7 @@ with col2:
 # --------------------------------------------------
 # Team deep dive
 # --------------------------------------------------
-st.subheader("Team Discipline Profile")
+st.subheader("🔍 Team Discipline Profile")
 
 team = st.selectbox("Select Team", sorted(df["team"].unique()))
 team_df = df[df["team"] == team]
@@ -238,29 +238,37 @@ radar_metrics = [
     "Errors_p90"
 ]
 
-radar_vals = team_df[radar_metrics].iloc[0]
-league_avg_vals = df[radar_metrics].mean()
+# Percentile normalization
+radar_norm = df[radar_metrics].rank(pct=True)
 
-radar_df = pd.DataFrame({
-    "Metric": radar_metrics,
-    "Team": radar_vals.values,
-    "League Avg": league_avg_vals.values
+team_vals = radar_norm.loc[team_df.index[0]]
+league_avg_vals = radar_norm.mean()
+
+radar_plot_df = pd.DataFrame({
+    "Metric": radar_metrics * 2,
+    "Value": list(team_vals.values) + list(league_avg_vals.values),
+    "Group": ["Team"] * len(radar_metrics) + ["League Avg"] * len(radar_metrics)
 })
 
 fig = px.line_polar(
-    radar_df,
-    r="Team",
+    radar_plot_df,
+    r="Value",
     theta="Metric",
+    color="Group",
     line_close=True,
-    title=f"{team} – Discipline Radar"
+    title=f"{team} – Discipline Radar (Percentile Normalized)"
 )
-fig.add_trace(
-    px.line_polar(
-        radar_df,
-        r="League Avg",
-        theta="Metric",
-        line_close=True
-    ).data[0]
+
+fig.update_traces(fill="toself")
+
+fig.update_layout(
+    polar=dict(
+        radialaxis=dict(
+            range=[0, 1],
+            showticklabels=True,
+            ticks="outside"
+        )
+    )
 )
 
 st.plotly_chart(fig, use_container_width=True)
