@@ -2,8 +2,9 @@
 
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import plotly.express as px
+import numpy as np
+from scipy.stats import chi2 
 
 st.set_page_config(page_title="Football Data Playground", layout="wide")
 
@@ -87,31 +88,53 @@ with tab2:
 # Visual Playground
 # =========================
 with tab3:
-    st.subheader("Interactive Plot Builder")
+    st.subheader("Interactive Plot Builder with 2D Outlier Highlighting")
 
     numeric_df = df.select_dtypes(include="number")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        x_axis = st.selectbox("X-axis", numeric_df.columns)
+        x_axis = st.selectbox("X-axis", numeric_df.columns, key="x_axis_maha")
 
     with col2:
-        y_axis = st.selectbox("Y-axis", numeric_df.columns)
+        y_axis = st.selectbox("Y-axis", numeric_df.columns, key="y_axis_maha")
 
     with col3:
-        plot_type = st.selectbox("Plot Type", ["Scatter", "Line", "Bar"])
+        plot_type = st.selectbox("Plot Type", ["Scatter", "Line", "Bar"], key="plot_type_maha")
 
-    if st.button("Generate Plot"):
-
+    if st.button("Generate Plot (2D Outliers)"):
         if plot_type == "Scatter":
+
+            # -------- Mahalanobis Distance Outlier Detection --------
+            data = df[[x_axis, y_axis]].dropna()
+            cov_matrix = np.cov(data.values, rowvar=False)
+            inv_cov_matrix = np.linalg.pinv(cov_matrix)
+            mean_vals = data.mean().values
+
+            # compute Mahalanobis distance
+            diff = data.values - mean_vals
+            md = np.sqrt(np.sum(diff @ inv_cov_matrix * diff, axis=1))
+
+            # Threshold for outliers (chi-square, 2 degrees of freedom)
+            threshold = np.sqrt(chi2.ppf(0.975, df=2))  # 97.5% confidence
+            outlier_mask = md > threshold
+
+            df_plot = df.copy()
+            df_plot["Outlier"] = outlier_mask
+
+            # -------- Scatter Plot --------
             fig = px.scatter(
-                df,
+                df_plot,
                 x=x_axis,
                 y=y_axis,
-                hover_name="team",   # 👈 hover shows team
-                hover_data=["league", "season"],
-                title=f"{x_axis} vs {y_axis}",
+                color="Outlier",               # outliers in red
+                hover_name="team",
+                hover_data=["league", "season", x_axis, y_axis],
+                title=f"{x_axis} vs {y_axis} (2D outliers highlighted)",
+                color_discrete_map={True: "red", False: "blue"},
+                opacity=0.7,
+                size=[15 if o else 8 for o in df_plot["Outlier"]]
             )
 
         elif plot_type == "Line":
@@ -140,46 +163,51 @@ with tab4:
 
     numeric_df = df.select_dtypes(include="number")
 
+    # Select target variable
     target = st.selectbox(
         "Select a target variable (what you care about predicting/explaining)",
         numeric_df.columns
     )
 
+    # Compute correlations with target
     corr = numeric_df.corr()[target].dropna().sort_values(ascending=False)
 
+    # Strongest positive correlations (exclude self-correlation)
+    top_pos = corr[corr.index != target].head(10)
+
+    # Strongest negative correlations
+    top_neg = corr.tail(10)
+
+    # Display in tables
     st.markdown("### Strongest Positive Relationships")
-    top_pos = corr[1:11]  # skip self-correlation
     st.dataframe(top_pos.to_frame("Correlation"))
 
     st.markdown("### Strongest Negative Relationships")
-    top_neg = corr[-10:]
     st.dataframe(top_neg.to_frame("Correlation"))
 
-    # -------- Plot --------
-    st.markdown("### Visual Relationships")
+    # Combine for plotting
+    plot_df = pd.concat([top_pos, top_neg]).reset_index()
+    plot_df.columns = ["Feature", "Correlation"]
 
-    top_features = pd.concat([top_pos, top_neg]).index.tolist()
+    # Horizontal bar plot
+    import plotly.express as px
 
     fig = px.bar(
-        x=corr[top_features].values,
-        y=top_features,
+        plot_df,
+        x="Correlation",
+        y="Feature",
         orientation="h",
-        labels={"x": "Correlation Strength", "y": "Feature"},
+        text="Correlation",
         title=f"Top Relationships with {target}"
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # -------- Auto Insight Text --------
+    # Auto Insights Text
     st.markdown("### Auto Insights")
-
-    insight_text = []
     for feature, value in top_pos.head(3).items():
-        insight_text.append(f"• **{feature}** strongly increases with **{target}** (corr = {value:.2f})")
-
+        st.write(f"• **{feature}** strongly increases with **{target}** (corr = {value:.2f})")
     for feature, value in top_neg.head(3).items():
-        insight_text.append(f"• **{feature}** strongly decreases with **{target}** (corr = {value:.2f})")
+        st.write(f"• **{feature}** strongly decreases with **{target}** (corr = {value:.2f})")
 
-    for line in insight_text:
-        st.write(line)
 
