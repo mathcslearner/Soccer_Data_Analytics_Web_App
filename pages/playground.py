@@ -4,7 +4,9 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
-from scipy.stats import chi2 
+from scipy.stats import chi2
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
 
 st.set_page_config(page_title="Football Data Playground", layout="wide")
 
@@ -54,11 +56,12 @@ if "team" in df.columns:
 # =========================
 # Tabs Layout
 # =========================
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Data Explorer",
     "Stats Lab",
     "Visual Playground",
-    "Correlations"
+    "Correlations",
+    "Feature Importance"
 ])
 
 # =========================
@@ -210,4 +213,51 @@ with tab4:
     for feature, value in top_neg.head(3).items():
         st.write(f"• **{feature}** strongly decreases with **{target}** (corr = {value:.2f})")
 
+# =============
+# Feature Importance (ML)
+# ==============
+with tab5:
+    st.subheader("🧠 Feature Importance Engine")
+
+    numeric_df = df.select_dtypes(include="number")
+    target = st.selectbox("Select prediction target", numeric_df.columns, key="fi_target")
+
+    X = numeric_df.drop(columns=[target]).fillna(0)
+    y = numeric_df[target].fillna(0)
+
+    if st.button("Train Model & Compute Importance"):
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+
+        rf = RandomForestRegressor(
+            n_estimators=300,
+            max_depth=None,
+            random_state=42,
+            n_jobs=-1
+        )
+
+        rf.fit(X_train, y_train)
+
+        fi_df = pd.DataFrame({
+            "Feature": X.columns,
+            "Importance": rf.feature_importances_
+        }).sort_values("Importance", ascending=False)
+
+        st.markdown("### 🔝 Most Important Features")
+        st.dataframe(fi_df.head(15))
+
+        fig = px.bar(
+            fi_df.head(20),
+            x="Importance",
+            y="Feature",
+            orientation="h",
+            title=f"Top Predictors of {target}",
+            text="Importance"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        r2 = rf.score(X_test, y_test)
+        st.success(f"Model performance (R² on test set): {r2:.3f}")
 
