@@ -7,6 +7,9 @@ import numpy as np
 from scipy.stats import chi2
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+import umap.umap_ as umap
 
 st.set_page_config(page_title="Football Data Playground", layout="wide")
 
@@ -56,12 +59,13 @@ if "team" in df.columns:
 # =========================
 # Tabs Layout
 # =========================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "Data Explorer",
     "Stats Lab",
     "Visual Playground",
     "Correlations",
-    "Feature Importance"
+    "Feature Importance",
+    "PCA / UMAP"
 ])
 
 # =========================
@@ -217,7 +221,7 @@ with tab4:
 # Feature Importance (ML)
 # ==============
 with tab5:
-    st.subheader("🧠 Feature Importance Engine")
+    st.subheader("Feature Importance Engine")
 
     numeric_df = df.select_dtypes(include="number")
     target = st.selectbox("Select prediction target", numeric_df.columns, key="fi_target")
@@ -261,3 +265,98 @@ with tab5:
         r2 = rf.score(X_test, y_test)
         st.success(f"Model performance (R² on test set): {r2:.3f}")
 
+# ===========
+# PCA/UMAP tab
+# ===========
+
+with tab6:
+    st.subheader("PCA / UMAP Tactical Space")
+
+    numeric_df = df.select_dtypes(include="number")
+
+    st.markdown("### Feature Selection")
+    selected_features = st.multiselect(
+        "Select features for embedding (high-dimensional space)",
+        numeric_df.columns.tolist(),
+        default=list(numeric_df.columns[:20])  # safe default
+    )
+
+    if len(selected_features) < 3:
+        st.warning("Select at least 3 features for PCA/UMAP")
+    else:
+        X = numeric_df[selected_features].fillna(0)
+
+        # Standardize
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            method = st.selectbox("Embedding Method", ["PCA", "UMAP"])
+
+        with col2:
+            color_by = st.selectbox(
+                "Color points by",
+                ["None"] + [c for c in ["league", "season"] if c in df.columns]
+            )
+
+        if method == "PCA":
+            pca = PCA(n_components=2, random_state=42)
+            embedding = pca.fit_transform(X_scaled)
+            explained = pca.explained_variance_ratio_
+
+            df_embed = df.copy()
+            df_embed["Dim1"] = embedding[:, 0]
+            df_embed["Dim2"] = embedding[:, 1]
+
+            title = f"PCA Tactical Map (Explained Var: {explained[0]:.2f}, {explained[1]:.2f})"
+
+        else:  # UMAP
+            n_neighbors = st.slider("UMAP n_neighbors", 5, 50, 15)
+            min_dist = st.slider("UMAP min_dist", 0.0, 1.0, 0.1)
+
+            reducer = umap.UMAP(
+                n_components=2,
+                n_neighbors=n_neighbors,
+                min_dist=min_dist,
+                random_state=42
+            )
+            embedding = reducer.fit_transform(X_scaled)
+
+            df_embed = df.copy()
+            df_embed["Dim1"] = embedding[:, 0]
+            df_embed["Dim2"] = embedding[:, 1]
+
+            title = "UMAP Tactical Map (Nonlinear Structure)"
+
+        # ---------- Plot ----------
+        fig = px.scatter(
+            df_embed,
+            x="Dim1",
+            y="Dim2",
+            color=None if color_by == "None" else color_by,
+            hover_name="team",
+            hover_data=["league", "season"],
+            title=title,
+            opacity=0.8
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # ---------- Interpretation Panel ----------
+        st.markdown("### 🧠 Interpretation Guide")
+        if method == "PCA":
+            st.write("""
+            • Distance = statistical similarity  
+            • Clusters = similar team profiles  
+            • Direction = tactical/statistical gradients  
+            • Axes = linear combinations of features  
+            """)
+        else:
+            st.write("""
+            • Distance = structural similarity  
+            • Clusters = playstyle archetypes  
+            • Outliers = unique tactical identities  
+            • Nonlinear structure = complex patterns  
+            """)
